@@ -15,19 +15,12 @@ from tensorflow.python.ops import rnn_cell
 class Model():
 
     def __init__(self, args, infer=False):
-        '''
-        Initialisation function for the class Model.
-        Params:
-        args: Contains arguments required for the Model creation
-        '''
-
         # If sampling new trajectories, then infer mode
         if infer:
             # Infer one position at a time
             args.batch_size = 1
             args.seq_length = 1
 
-        # Store the arguments
         self.args = args
 
         # Initialize a BasicLSTMCell recurrent unit
@@ -41,13 +34,8 @@ class Model():
         # Store the recurrent unit
         self.cell = cell
 
-        # TODO: (resolve) Do we need to use a fixed seq_length?
-        # Input data contains sequence of (x,y) points
         self.input_data = tf.placeholder(tf.float32, [None, args.seq_length, 2])
-        # target data contains sequences of (x,y) points as well
         self.target_data = tf.placeholder(tf.float32, [None, args.seq_length, 2])
-
-        # Learning rate
         self.lr = tf.Variable(args.learning_rate, trainable=False, name="learning_rate")
 
         # Initial cell state of the LSTM (initialised with zeros)
@@ -70,7 +58,7 @@ class Model():
             output_b = tf.get_variable("output_b", [output_size], initializer=tf.constant_initializer(0.01), trainable=True)
 
         # Split inputs according to sequences.
-        inputs = tf.split(1, args.seq_length, self.input_data)
+        inputs = tf.split(self.input_data, args.seq_length, 1)
         # Get a list of 2D tensors. Each of size numPoints x 2
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
@@ -83,10 +71,10 @@ class Model():
             embedded_inputs.append(embedded_x)
 
         # Feed the embedded input data, the initial state of the LSTM cell, the recurrent unit to the seq2seq decoder
-        outputs, last_state = tf.nn.seq2seq.rnn_decoder(embedded_inputs, self.initial_state, cell, loop_function=None, scope="rnnlm")
+        outputs, last_state = tf.contrib.legacy_seq2seq.rnn_decoder(embedded_inputs, self.initial_state, cell, loop_function=None, scope="rnnlm")
 
         # Concatenate the outputs from the RNN decoder and reshape it to ?xargs.rnn_size
-        output = tf.reshape(tf.concat(1, outputs), [-1, args.rnn_size])
+        output = tf.reshape(tf.concat(outputs, 1), [-1, args.rnn_size])
 
         # Apply the output linear layer
         output = tf.nn.xw_plus_b(output, output_w, output_b)
@@ -96,7 +84,7 @@ class Model():
         # reshape target data so that it aligns with predictions
         flat_target_data = tf.reshape(self.target_data, [-1, 2])
         # Extract the x-coordinates and y-coordinates from the target data
-        [x_data, y_data] = tf.split(1, 2, flat_target_data)
+        [x_data, y_data] = tf.split(flat_target_data, 2, 1)
 
         def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
             '''
@@ -113,17 +101,17 @@ class Model():
             # eq 3 in the paper
             # and eq 24 & 25 in Graves (2013)
             # Calculate (x - mux) and (y-muy)
-            normx = tf.sub(x, mux)
-            normy = tf.sub(y, muy)
+            normx = tf.subtract(x, mux)
+            normy = tf.subtract(y, muy)
             # Calculate sx*sy
-            sxsy = tf.mul(sx, sy)
+            sxsy = tf.multiply(sx, sy)
             # Calculate the exponential factor
-            z = tf.square(tf.div(normx, sx)) + tf.square(tf.div(normy, sy)) - 2*tf.div(tf.mul(rho, tf.mul(normx, normy)), sxsy)
+            z = tf.square(tf.div(normx, sx)) + tf.square(tf.div(normy, sy)) - 2*tf.div(tf.multiply(rho, tf.multiply(normx, normy)), sxsy)
             negRho = 1 - tf.square(rho)
             # Numerator
             result = tf.exp(tf.div(-z, 2*negRho))
             # Normalization constant
-            denom = 2 * np.pi * tf.mul(sxsy, tf.sqrt(negRho))
+            denom = 2 * np.pi * tf.multiply(sxsy, tf.sqrt(negRho))
             # Final PDF calculation
             result = tf.div(result, denom)
             self.result = result
@@ -154,7 +142,7 @@ class Model():
             result0_4 = tf_2d_normal(tf.add(x_data, step), tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
 
             result0 = tf.div(tf.add(tf.add(tf.add(result0_1, result0_2), result0_3), result0_4), tf.constant(4.0, dtype=tf.float32, shape=(1, 1)))
-            result0 = tf.mul(tf.mul(result0, step), step)
+            result0 = tf.multiply(tf.multiply(result0, step), step)
 
             # For numerical stability purposes
             epsilon = 1e-20
@@ -178,7 +166,7 @@ class Model():
 
             z = output
             # Split the output into 5 parts corresponding to means, std devs and corr
-            z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(1, 5, z)
+            z_mux, z_muy, z_sx, z_sy, z_corr = tf.split(z, 5, 1)
 
             # The output must be exponentiated for the std devs
             z_sx = tf.exp(z_sx)

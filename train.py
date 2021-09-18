@@ -11,10 +11,10 @@ from utils import DataLoader
 
 def main():
     parser = argparse.ArgumentParser()
-    # RNN size parameter (dimension of the output/hidden state)
+    # RNN size parameter (dimension of the output/hidden state)输出、隐藏层的维度
     parser.add_argument('--rnn_size', type=int, default=128,
                         help='size of RNN hidden state')
-    # Number of layers parameter
+    # Number of layers parameter  层数
     # TODO: (improve) Number of layers not used. Only a single layer implemented
     parser.add_argument('--num_layers', type=int, default=1,
                         help='number of layers in the RNN')
@@ -58,7 +58,7 @@ def main():
 
 
 def train(args):
-    datasets = range(2)
+    datasets = list(range(2))
     # Remove the leaveDataset from datasets
     datasets.remove(args.leaveDataset)
 

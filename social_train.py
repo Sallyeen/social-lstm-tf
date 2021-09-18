@@ -12,7 +12,7 @@ from grid import getSequenceGridMask
 
 def main():
     parser = argparse.ArgumentParser()
-    # RNN size parameter (dimension of the output/hidden state)
+    # 输出层隐藏层维度 RNN size parameter (dimension of the output/hidden state)
     parser.add_argument('--rnn_size', type=int, default=128,
                         help='size of RNN hidden state')
     # TODO: (improve) Number of layers not used. Only a single layer implemented
@@ -69,83 +69,54 @@ def main():
 
 
 def train(args):
-    datasets = range(2)
-    # Remove the leaveDataset from datasets
+    datasets = list(range(2))
     datasets.remove(args.leaveDataset)
 
-    # Create the SocialDataLoader object
-    data_loader = SocialDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, datasets, forcePreProcess=True)
+    data_loader = SocialDataLoader(args.batch_size, args.seq_length, args.maxNumPeds, datasets, forcePreProcess=False)
 
     with open(os.path.join('save', 'social_config.pkl'), 'wb') as f:
         pickle.dump(args, f)
 
-    # Create a SocialModel object with the arguments
     model = SocialModel(args)
 
-    # Initialize a TensorFlow session
     with tf.Session() as sess:
-        # Initialize all variables in the graph
-        sess.run(tf.initialize_all_variables())
-        # Initialize a saver that saves all the variables in the graph
-        saver = tf.train.Saver(tf.all_variables())
+        sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(tf.global_variables())
+        #summary_writer = tf.summary.FileWriter('/tmp/lstm/logs', graph_def=sess.graph_def)
 
-        # summary_writer = tf.train.SummaryWriter('/tmp/lstm/logs', graph_def=sess.graph_def)
-
-        # For each epoch
+        # 以每次训练为循环，共num_epochs50次
         for e in range(args.num_epochs):
-            # Assign the learning rate value for this epoch
             sess.run(tf.assign(model.lr, args.learning_rate * (args.decay_rate ** e)))
-            # Reset the data pointers in the data_loader
             data_loader.reset_batch_pointer()
-
-            # For each batch
+            # 以每个batch为循环，共num_batches20次
             for b in range(data_loader.num_batches):
-                # Tic
                 start = time.time()
-
-                # Get the source, target and dataset data for the next batch
-                # x, y are input and target data which are lists containing numpy arrays of size seq_length x maxNumPeds x 3
-                # d is the list of dataset indices from which each batch is generated (used to differentiate between datasets)
+                # x, y seq_length x maxNumPeds x 3，d用来区分数据集
                 x, y, d = data_loader.next_batch()
-
-                # variable to store the loss for this batch
                 loss_batch = 0
-
-                # For each sequence in the batch
+                # 以一个batch中每个样本【五个连续帧】为循环，共10次
                 for batch in range(data_loader.batch_size):
-                    # x_batch, y_batch and d_batch contains the source, target and dataset index data for
-                    # seq_length long consecutive frames in the dataset
-                    # x_batch, y_batch would be numpy arrays of size seq_length x maxNumPeds x 3
-                    # d_batch would be a scalar identifying the dataset from which this sequence is extracted
+                    # x_batch, y_batch seq_length x maxNumPeds x 3，d_batch标量
                     x_batch, y_batch, d_batch = x[batch], y[batch], d[batch]
-
                     if d_batch == 0 and datasets[0] == 0:
                         dataset_data = [640, 480]
                     else:
                         dataset_data = [720, 576]
-
                     grid_batch = getSequenceGridMask(x_batch, dataset_data, args.neighborhood_size, args.grid_size)
-
                     # Feed the source, target data
                     feed = {model.input_data: x_batch, model.target_data: y_batch, model.grid_data: grid_batch}
-
                     train_loss, _ = sess.run([model.cost, model.train_op], feed)
-
                     # if result[0][0] > 1:
-                    #    print result
-
+                    #    print resul
                     loss_batch += train_loss
-
                 end = time.time()
-                loss_batch = loss_batch / data_loader.batch_size
-                print(
-                    "{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
+                loss_batch = loss_batch / data_loader.batch_size#平均每组数据的训练损失
+                print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
                     .format(
                         e * data_loader.num_batches + b,
                         args.num_epochs * data_loader.num_batches,
                         e,
                         loss_batch, end - start))
-
                 # Save the model if the current epoch and batch number match the frequency
                 if (e * data_loader.num_batches + b) % args.save_every == 0 and ((e * data_loader.num_batches + b) > 0):
                     checkpoint_path = os.path.join('save', 'social_model.ckpt')

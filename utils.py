@@ -8,13 +8,8 @@ import random
 class DataLoader():
 
     def __init__(self, batch_size=50, seq_length=5, datasets=[0, 1, 2, 3, 4], forcePreProcess=False):
-        '''
-        Initialiser function for the DataLoader class
-        params:
-        batch_size : Size of the mini-batch
-        seq_length : RNN sequence length
-        '''
-        # List of data directories where raw data resides
+
+        # List of data directories where raw data resides 原始数据的数据目录列表
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
         #                  './data/ucy/zara/zara01', './data/ucy/zara/zara02',
         #                  './data/ucy/univ']
@@ -22,35 +17,30 @@ class DataLoader():
 
         self.used_data_dirs = [self.data_dirs[x] for x in datasets]
 
-        # Data directory where the pre-processed pickle file resides
+        # Data directory where the pre-processed pickle file resides 预处理的pickle文件所在的数据目录
         self.data_dir = './data'
 
-        # Store the batch size and the sequence length arguments
+        # Store the batch size and the sequence length arguments 存储batchsize和序列长度的参数
         self.batch_size = batch_size
         self.seq_length = seq_length
 
-        # Define the path of the file in which the data needs to be stored
+        # Define the path of the file in which the data needs to be stored 定义需要存储数据的文件路径[data下.cpkl]
         data_file = os.path.join(self.data_dir, "trajectories.cpkl")
 
-        # If the file doesn't exist already or if forcePreProcess is true
+        # If the file doesn't exist already or if forcePreProcess is true 如果文件不存在或forcePreProcess为true,则从原始csv数据创建预处理数据
         if not(os.path.exists(data_file)) or forcePreProcess:
             print("Creating pre-processed data from raw data")
             # Preprocess the data from the csv files
             self.preprocess(self.used_data_dirs, data_file)
 
-        # Load the data from the pickled file
+        # Load the data from the pickled file 从pickle文件加载数据
         self.load_preprocessed(data_file)
-        # Reset all the pointers
+        # Reset all the pointers 重置pointer
         self.reset_batch_pointer()
 
+    #预处理：从data_dirs把csv文件预处理成可用形式，存放于data-file
     def preprocess(self, data_dirs, data_file):
-        '''
-        The function that pre-processes the pixel_pos.csv files of each dataset
-        into data that can be used
-        params:
-        data_dirs : List of directories where raw data resides
-        data_file : The file into which all the pre-processed data needs to be stored
-        '''
+
         # all_ped_data would be a dictionary with mapping from each ped to their
         # trajectories given by matrix 3 x numPoints with each column
         # in the order x, y, frameId
@@ -69,17 +59,17 @@ class DataLoader():
             # where each column is a (frameId, pedId, y, x) vector
             data = np.genfromtxt(file_path, delimiter=',')
 
-            # Get the number of pedestrians in the current dataset
+            # Get the number of pedestrians in the current dataset[unique表示按data矩阵第二行，即行人id，去重保留一个]
             numPeds = np.size(np.unique(data[1, :]))
 
-            # For each pedestrian in the dataset
+            # For each pedestrian in the dataset对于每个行人，提取出四个维度的data矩阵，表示行人轨迹
             for ped in range(1, numPeds+1):
                 # Extract trajectory of the current ped
                 traj = data[:, data[1, :] == ped]
                 # Format it as (x, y, frameId)
                 traj = traj[[3, 2, 0], :]
 
-                # Store this in the dictionary
+                # Store this in the dictionary all_ped_data是所有行人与轨迹的键值对集合，1:1号行人的轨迹
                 all_ped_data[current_ped + ped] = traj
 
             # Current dataset done
@@ -88,11 +78,12 @@ class DataLoader():
 
         # The complete data is a tuple of all pedestrian data, and dataset ped indices
         complete_data = (all_ped_data, dataset_indices)
-        # Store the complete data into the pickle file
+        # Store the complete data into the pickle file 新建或打开更新上述data下pkl文件，把complete_data封装进去
         f = open(data_file, "wb")
         pickle.dump(complete_data, f, protocol=2)
         f.close()
 
+    #把预处理数据加载进DataLoader对象
     def load_preprocessed(self, data_file):
         '''
         Function to load the pre-processed data into the DataLoader object
@@ -118,6 +109,7 @@ class DataLoader():
             # Extract his trajectory
             traj = all_ped_data[ped]
             # If the length of the trajectory is greater than seq_length (+2 as we need both source and target data)
+            #第二维度（列）长度大于序列长度+2
             if traj.shape[1] > (self.seq_length+2):
                 # TODO: (Improve) Store only the (x,y) coordinates for now
                 self.data.append(traj[[0, 1], :].T)
@@ -154,6 +146,7 @@ class DataLoader():
 
         return x_batch, y_batch
 
+    #前进数据pointer
     def tick_batch_pointer(self):
         '''
         Advance the data pointer
@@ -162,6 +155,7 @@ class DataLoader():
         if (self.pointer >= len(self.data)):
             self.pointer = 0
 
+    #重置数据pointer，设为0
     def reset_batch_pointer(self):
         '''
         Reset the data pointer
