@@ -6,7 +6,9 @@ Author : Anirudh Vemula
 Date: 10th October 2016
 '''
 
+# import tensorflow.compat.v1 as tf
 import tensorflow as tf
+# tf.disable_v2_behavior()
 import numpy as np
 from tensorflow.python.ops import rnn_cell
 
